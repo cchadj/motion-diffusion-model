@@ -13,7 +13,10 @@ if __name__ == '__main__':
 
     assert params.input_path.endswith('.mp4')
     parsed_name = os.path.basename(params.input_path).replace('.mp4', '').replace('sample', '').replace('rep', '')
-    sample_i, rep_i = [int(e) for e in parsed_name.split('_')]
+    try:
+        sample_i, rep_i = [int(e) for e in parsed_name.split('_')]
+    except ValueError:
+        sample_i, rep_i = 0, 0
     npy_path = os.path.join(os.path.dirname(params.input_path), 'results.npy')
     out_npy_path = params.input_path.replace('.mp4', '_smpl_params.npy')
     assert os.path.exists(npy_path)

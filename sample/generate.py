@@ -146,7 +146,7 @@ def main():
             text_key = 'text' if 'text' in model_kwargs['y'] else 'action_text'
             all_text += model_kwargs['y'][text_key]
 
-	all_full_motions.append(full_motion)
+	    all_full_motions.append(full_motion)
         all_motions.append(sample.cpu().numpy())
         all_lengths.append(model_kwargs['y']['lengths'].cpu().numpy())
 

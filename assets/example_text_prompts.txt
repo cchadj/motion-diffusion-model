@@ -1,8 +1,16 @@
-person got down and is crawling across the floor.
+a person got down and is crawling across the floor.
 a person walks forward with wide steps.
 a person drops their hands then brings them together in front of their face clasped.
 a person lifts their right arm and slaps something, then repeats the motion again.
 a person walks forward and stops.
 a person marches forward, turns around, and then marches back.
 a person is stretching their arms.
-person is making attention gesture
+a person is making attention gesture.
+a person walks forward and then does a backflip.
+a man kicks with something or someone with his left leg.
+a person is skipping rope.
+a person is happily prancing in a straight line.
+a person is prancing about.
+a person is dancing.
+a person is happily dancing.
+a man is happily dancing while having his arms up. 

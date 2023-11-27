@@ -128,7 +128,7 @@ def main():
 
         # Recover XYZ *positions* from HumanML3D vector representation
         if model.data_rep == 'hml_vec':
-	    full_motion = sample.cpu().numpy().squeeze().T
+            full_motion = sample.cpu().numpy().squeeze().T
             n_joints = 22 if sample.shape[1] == 263 else 21
             sample = data.dataset.t2m_dataset.inv_transform(sample.cpu().permute(0, 2, 3, 1)).float()
             sample = recover_from_ric(sample, n_joints)

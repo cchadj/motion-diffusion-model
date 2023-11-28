@@ -146,7 +146,7 @@ def main():
             text_key = 'text' if 'text' in model_kwargs['y'] else 'action_text'
             all_text += model_kwargs['y'][text_key]
 
-	    all_full_motions.append(full_motion)
+        all_full_motions.append(full_motion)
         all_motions.append(sample.cpu().numpy())
         all_lengths.append(model_kwargs['y']['lengths'].cpu().numpy())
 
@@ -166,10 +166,10 @@ def main():
     motion_json_data = defaultdict(list)
     data_parser = MotionDataParser()
     for full_motion in all_full_motions:
-	motion_data = data_parser.parse_as_dict(full_motion)
-	serialisable_dict = {k: v.tolist() for k, v in motion_data_dict.items()}
-	for k, v in serialisable_dict.items():
-		motion_json_data[k].append(v)
+        motion_data = data_parser.parse_as_dict(full_motion)
+        serializable_dict = {k: v.tolist() for k, v in motion_data.items()}
+        for k, v in serializable_dict.items():
+            motion_json_data[k].append(v)
     with open(output_path / "motion.json", "w") as fp:
 	json.dump(motion_json_data, fp)
 

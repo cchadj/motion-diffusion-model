@@ -443,3 +443,19 @@ that our code is based on:
 This code is distributed under an [MIT LICENSE](LICENSE).
 
 Note that our code depends on other libraries, including CLIP, SMPL, SMPL-X, PyTorch3D, and uses datasets that each have their own respective licenses that must also be followed.
+
+## How to run the server
+### Requirements
+1. cuda capable gpu
+2. python environment with mdm dependencies + flask + redis  `pip install Flask Celery redis`
+3. redis ( https://redis.io/docs/install/install-redis/ )
+
+### Run service
+1. launch redis server
+`redis-server`
+
+2. launch text-to-motion server
+`python app.py`
+
+3. launch celery worker
+`celery -A app.celery worker --loglevel=info --pool=solo`

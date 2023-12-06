@@ -7,8 +7,9 @@ smplx
 scipy
 matplotlib
 spacy[cuda110]
-numpy==1.23.5
+numpy==1.21.6
 chumpy
 Flask
+importlib-metadata==4.13.0
 Celery
 redis

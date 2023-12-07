@@ -3,6 +3,7 @@
 Generate a large batch of image samples from a model and save them as a large
 numpy array. This can be used to produce samples for FID evaluation.
 """
+from app import MotionDataParser
 from utils.fixseed import fixseed
 import os
 import numpy as np
@@ -17,6 +18,9 @@ import data_loaders.humanml.utils.paramUtil as paramUtil
 from data_loaders.humanml.utils.plot_script import plot_3d_motion
 import shutil
 from data_loaders.tensors import collate
+from pathlib import Path
+
+import json
 
 
 def main():
@@ -127,8 +131,11 @@ def main():
         )
 
         # Recover XYZ *positions* from HumanML3D vector representation
+        parser = MotionDataParser()
         if model.data_rep == 'hml_vec':
             full_motion = sample.cpu().numpy().squeeze().T
+            all_full_motions.append(full_motion)
+
             n_joints = 22 if sample.shape[1] == 263 else 21
             sample = data.dataset.t2m_dataset.inv_transform(sample.cpu().permute(0, 2, 3, 1)).float()
             sample = recover_from_ric(sample, n_joints)
@@ -146,14 +153,12 @@ def main():
             text_key = 'text' if 'text' in model_kwargs['y'] else 'action_text'
             all_text += model_kwargs['y'][text_key]
 
-        all_full_motions.append(full_motion)
         all_motions.append(sample.cpu().numpy())
         all_lengths.append(model_kwargs['y']['lengths'].cpu().numpy())
 
         print(f"created {len(all_motions) * args.batch_size} samples")
 
-    import ipdb; ipdb.set_trace()
-    all_full_motions = np.concatenate(full_motion, axis=0)
+    # import ipdb; ipdb.set_trace()
     all_motions = np.concatenate(all_motions, axis=0)
     all_motions = all_motions[:total_num_samples]  # [bs, njoints, 6, seqlen]
     all_text = all_text[:total_num_samples]
@@ -163,15 +168,16 @@ def main():
         shutil.rmtree(out_path)
     os.makedirs(out_path)
 
-    motion_json_data = defaultdict(list)
+    motion_json_data = []
     data_parser = MotionDataParser()
     for full_motion in all_full_motions:
         motion_data = data_parser.parse_as_dict(full_motion)
-        serializable_dict = {k: v.tolist() for k, v in motion_data.items()}
-        for k, v in serializable_dict.items():
-            motion_json_data[k].append(v)
-    with open(output_path / "motion.json", "w") as fp:
-	json.dump(motion_json_data, fp)
+        serialisable_dict = {k: v.tolist() for k, v in motion_data.items()}
+        motion_json_data.append(serialisable_dict)
+    out_path = Path(out_path)
+    motion_json_file = out_path / "motion.json"
+    with open(motion_json_file, "w") as fp:
+        json.dump(motion_json_data, fp)
 
     npy_path = os.path.join(out_path, 'results.npy')
     print(f"saving results file to [{npy_path}]")

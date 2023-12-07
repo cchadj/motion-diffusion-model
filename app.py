@@ -1,12 +1,13 @@
-import os
 import sys
 from argparse import ArgumentParser
+from dataclasses import asdict
 
 import json
 from celery import Celery, current_task
 from redis import Redis
-from flask import Flask, jsonify, send_from_directory, request
-from collections import defaultdict
+from flask import Flask, send_from_directory, request
+
+from data_loaders.humanml.common.quaternion import qinv, qrot
 
 # sample/generate.py
 # This code is based on https://github.com/openai/guided-diffusion
@@ -37,7 +38,57 @@ from typing import Dict
 
 
 @dataclass
-class MotionDataParser():
+class MotionData:
+    ric_data: np.ndarray
+    rot_data: np.ndarray
+    root_y: np.ndarray
+    root_r_velocity: np.ndarray
+    root_l_velocity: np.ndarray
+    feet_l: np.ndarray
+    feet_r: np.ndarray
+    global_positions: np.ndarray
+
+    def __post_init__(self):
+        assert self.ric_data.shape[0] == self.rot_data.shape[0] == self.root_y.shape[0] == self.root_r_velocity.shape[0] == self.root_l_velocity.shape[0] == self.feet_l.shape[0] == self.feet_r.shape[0] == self.global_positions.shape[0]
+
+        assert self.ric_data.shape[1] == 63
+        assert self.rot_data.shape[1] == 126
+        assert self.root_y.shape[1] == 1
+        assert self.root_r_velocity.shape[1] == 1
+        assert self.root_l_velocity.shape[1] == 2
+        assert self.feet_l.shape[1] == 2
+        assert self.feet_r.shape[1] == 2
+        assert self.global_positions.shape[1] == 22
+        assert self.global_positions.shape[2] == 3
+
+    def asdict(self) -> Dict[str, np.ndarray]:
+        return asdict(self)
+
+
+def recover_root_rot_pos(data: np.ndarray):
+    rot_vel = data[..., 0]
+    r_rot_ang = np.zeros_like(rot_vel)
+    '''Get Y-axis rotation from rotation velocity'''
+    r_rot_ang[..., 1:] = rot_vel[..., :-1]
+    r_rot_ang = np.cumsum(r_rot_ang, axis=-1)
+
+    r_rot_quat = np.zeros(data.shape[:-1] + (4,))
+    r_rot_quat[..., 0] = np.cos(r_rot_ang)
+    r_rot_quat[..., 2] = np.sin(r_rot_ang)
+
+    r_pos = np.zeros(data.shape[:-1] + (3,))
+    r_pos[..., 1:, [0, 2]] = data[..., :-1, 1:3]
+    '''Add Y-axis rotation to root position'''
+    r_pos = qrot(qinv(r_rot_quat), r_pos)
+
+    r_pos = np.cumsum(r_pos, dim=-2)
+
+    r_pos[..., 1] = data[..., 3]
+    return r_rot_quat, r_pos
+
+
+@dataclass
+class MotionDataParser:
     joints_num: int = field(default=22)
     time_axis: int = field(default=0)
     
@@ -99,17 +150,24 @@ class MotionDataParser():
     
     def get_feet_l(self, data: np.ndarray) -> np.ndarray:
         return data[:, self.feet_l_slice]
-    
+
+    def get_global_positions(self, data: np.ndarray) -> np.ndarray:
+        return recover_from_ric(torch.from_numpy(data).to("cpu"), self.joints_num).numpy()
+
     def parse_as_dict(self, data: np.ndarray) -> Dict[str, np.ndarray]:
-        return {
-            "ric_data": self.get_ric_data(data),
-            "rot_data": self.get_rot_data(data),
-            "root_y": self.get_root_y(data),
-            "root_r_velocity": self.get_root_r_velocity(data),
-            "root_l_velocity": self.get_root_l_velocity(data),
-            "feet_l": self.get_feet_l(data),
-            "feet_r": self.get_feet_r(data),
-        }
+        return self.parse_to_object(data).asdict()
+
+    def parse_to_object(self, data: np.ndarray):
+        return MotionData(
+            ric_data=self.get_ric_data(data),
+            rot_data=self.get_rot_data(data),
+            root_y=self.get_root_y(data),
+            root_r_velocity=self.get_root_r_velocity(data),
+            root_l_velocity=self.get_root_l_velocity(data),
+            feet_l=self.get_feet_l(data),
+            feet_r=self.get_feet_r(data),
+            global_positions=self.get_global_positions(data)
+        )
 
 
 def generate_sample(
@@ -240,8 +298,8 @@ def generate_sample(
 
         # Recover XYZ *positions* from HumanML3D vector representation
         if model.data_rep == 'hml_vec':
-	    full_motion = sample.cpu().numpy().squeeze().T
-	    all_full_motions.append(full_motion)
+            full_motion = sample.cpu().numpy().squeeze().T
+            all_full_motions.append(full_motion)
 
             n_joints = 22 if sample.shape[1] == 263 else 21
             sample = data.dataset.t2m_dataset.inv_transform(sample.cpu().permute(0, 2, 3, 1)).float()
@@ -275,15 +333,16 @@ def generate_sample(
         shutil.rmtree(out_path)
     os.makedirs(out_path)
 
-    motion_json_data = defaultdict(list)
+    motion_json_data = []
     data_parser = MotionDataParser()
     for full_motion in all_full_motions:
-	motion_data = data_parser.parse_as_dict(full_motion)
-	serialisable_dict = {k: v.tolist() for k, v in motion_data_dict.items()}
-	for k, v in serialisable_dict.items():
-		motion_json_data[k].append(v)
-    with open(output_path / "motion.json", "w") as fp:
-	json.dump(motion_json_data, fp)
+        motion_data = data_parser.parse_as_dict(full_motion)
+        serialisable_dict = {k: v.tolist() for k, v in motion_data.items()}
+        motion_json_data.append(serialisable_dict)
+    out_path = Path(out_path)
+    motion_json_file = out_path / "motion.json"
+    with open(motion_json_file, "w") as fp:
+        json.dump(motion_json_data, fp)
 
     npy_path = os.path.join(out_path, 'results.npy')
     print(f"saving results file to [{npy_path}]")

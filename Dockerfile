@@ -25,7 +25,8 @@ RUN pip install --upgrade pip && \
     chumpy \
     Flask \
     Celery \
-    redis
+    redis \
+    python-dotenv
 
 RUN python -m spacy download en_core_web_sm
 

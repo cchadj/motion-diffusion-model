@@ -3,11 +3,16 @@ from argparse import ArgumentParser
 from dataclasses import asdict
 
 import json
+from http import HTTPStatus
+
 from celery import Celery, current_task
 from redis import Redis
 from flask import Flask, send_from_directory, request
 
 from data_loaders.humanml.common.quaternion import qinv, qrot
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # sample/generate.py
 # This code is based on https://github.com/openai/guided-diffusion
@@ -323,7 +328,6 @@ def generate_sample(
 
         print(f"created {len(all_motions) * args.batch_size} samples")
 
-    all_full_motions = np.concatenate(all_full_motions, axis=0)
     all_motions = np.concatenate(all_motions, axis=0)
     all_motions = all_motions[:total_num_samples]  # [bs, njoints, 6, seqlen]
     all_text = all_text[:total_num_samples]
@@ -382,7 +386,7 @@ def generate_sample(
 
     abs_path = os.path.abspath(out_path)
     print(f'[Done] Results are at [{abs_path}]')
-    return abs_path
+    return Path(abs_path)
 
 
 def save_multiple_samples(args, out_path, row_print_template, all_print_template, row_file_template, all_file_template,
@@ -439,14 +443,20 @@ def load_dataset(args, max_frames, n_frames):
         data.dataset.t2m_dataset.fixed_length = n_frames
     return data
 
+
 # Server Related code
-# app = Flask(__name__)
+UPLOAD_DIRECTORY = "uploads"
 app = Flask("app")
 
+SERVICE_PORT = os.getenv("SERVICE_PORT", 7777)
+REDIS_HOST = os.getenv("REDIS_HOST", "redis")
+REDIS_PORT = os.getenv("REDIS_PORT", 6379)
+
 # Configure Celery (using Redis as broker)
-app.config["CELERY_BROKER_URL"] = "redis://localhost:6379/0"
-app.config["CELERY_RESULT_BACKEND"] = "redis://localhost:6379/0"
-redis_client = Redis(host='localhost', port=6379, db=0)
+app.config["CELERY_BROKER_URL"] = f"redis://{REDIS_HOST}:{REDIS_PORT}/0"
+app.config["CELERY_RESULT_BACKEND"] = f"redis://{REDIS_HOST}:{REDIS_PORT}/0"
+
+redis_client = Redis(host=REDIS_HOST, port=REDIS_PORT, db=0)
 
 # Initialize Celery
 celery = Celery(app.name, broker=app.config["CELERY_BROKER_URL"])
@@ -454,6 +464,7 @@ celery.conf.update(app.config)
 
 def generate_sample_mock(*args, **kwargs):
     return 
+
 
 # A simple Celery task
 @celery.task
@@ -494,6 +505,12 @@ def task_status(task_id):
     return response
 
 
+@app.route("/")
+def index():
+    return {
+        "message": "server is running"
+    }, HTTPStatus.OK
+
 @app.route("/tasks")
 def tasks():
     task_infos = redis_client.lrange('task_infos', 0, -1)
@@ -525,17 +542,16 @@ def model():
 
 @app.route('/download/<path:filename>')
 def download_file(filename):
-    UPLOAD_DIRECTORY = "uploads"
     return send_from_directory(
-	UPLOAD_DIRECTORY,
-	filename,
-	as_attachment=True
+        UPLOAD_DIRECTORY,
+        filename,
+        as_attachment=True
     )
 
 
 @app.route("/start_task/<text_prompt>")
 def start_task(text_prompt: str):
-    num_repetitions = request.args.get("num_repetitions", default=3, type=int)
+    num_repetitions = request.args.get("num_repetitions", default=1, type=int)
 
     task = generate_sample_task.apply_async(args=[text_prompt, num_repetitions])
     task_info = json.dumps({"task_id": task.id, "text_prompt": text_prompt})
@@ -545,10 +561,10 @@ def start_task(text_prompt: str):
 
 def main() -> int:
     parser = ArgumentParser()
-    parser.add_argument("--port", type=int, default=5000)
+    parser.add_argument("--port", type=int, default=SERVICE_PORT)
     args = parser.parse_args()
 
-    app.run(debug=True, port=args.port)
+    app.run(debug=True, port=args.port, host="0.0.0.0")
     return os.EX_OK
 
 

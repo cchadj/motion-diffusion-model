@@ -445,7 +445,7 @@ def load_dataset(args, max_frames, n_frames):
 
 
 # Server Related code
-UPLOAD_DIRECTORY = "uploads"
+UPLOAD_DIRECTORY = Path("uploads")
 app = Flask("app")
 
 SERVICE_PORT = os.getenv("SERVICE_PORT", 7777)
@@ -462,20 +462,28 @@ redis_client = Redis(host=REDIS_HOST, port=REDIS_PORT, db=0)
 celery = Celery(app.name, broker=app.config["CELERY_BROKER_URL"])
 celery.conf.update(app.config)
 
-def generate_sample_mock(*args, **kwargs):
-    return 
-
 
 # A simple Celery task
 @celery.task
-def generate_sample_task(text_prompt: str, num_repetitions: int):
+def generate_sample_task(
+    text_prompt: str,
+    num_repetitions: int,
+    *, output_path: Union[PathLike, str],
+    is_test: bool,
+    url_root: str
+):
     task_id = current_task.request.id
-    output_dir = Path("uploads", task_id)
-    output_path = generate_sample(text_prompt, num_repetitions, output_path=str(output_dir))
     output_path = Path(output_path)
-    results_relative_path = Path(output_path.name) / "results.npy"
+    output_dir = output_path / task_id
+    if not is_test:
+        output_path = generate_sample(text_prompt, num_repetitions, output_path=str(output_dir))
+        output_path = Path(output_path)
+    else:
+        uploaded_tasks = list(output_path.iterdir())
+        output_path =  uploaded_tasks[0]
+    results_relative_path = Path(output_path.name) / "motion.json"
     return {
-        "url": f"http://127.0.0.1:5000/download/{results_relative_path}",
+        "url": f"{url_root}download/{results_relative_path}",
         "text_prompt": text_prompt,
     }
 
@@ -552,8 +560,16 @@ def download_file(filename):
 @app.route("/start_task/<text_prompt>")
 def start_task(text_prompt: str):
     num_repetitions = request.args.get("num_repetitions", default=1, type=int)
+    is_test = request.args.get("is_test", default=False, type=bool)
 
-    task = generate_sample_task.apply_async(args=[text_prompt, num_repetitions])
+    task = generate_sample_task.apply_async(
+        args=[text_prompt, num_repetitions],
+        kwargs={
+            "output_path": str(UPLOAD_DIRECTORY),
+            "is_test": is_test,
+            "url_root": request.url_root
+        }
+    )
     task_info = json.dumps({"task_id": task.id, "text_prompt": text_prompt})
     redis_client.lpush('task_infos', task_info)
     return {"task_id": str(task.id)}, 202

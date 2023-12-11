@@ -445,6 +445,39 @@ This code is distributed under an [MIT LICENSE](LICENSE).
 Note that our code depends on other libraries, including CLIP, SMPL, SMPL-X, PyTorch3D, and uses datasets that each have their own respective licenses that must also be followed.
 
 ## How to run the server
+
+## Docker 
+
+### Requirements
+
+1. cuda capable gpu
+2. docker with [Nvidia Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) ( comes by default on Windows )
+
+### Run service
+
+1. Download HumanML3D dependencies
+
+To use the sample generation, HumanML3D text dataset must be present in `./dataset/`.  \
+*This is something that  should be fixed in the future as it's not needed for the sample generation*
+
+```shell
+# somewhere outside of the project
+git clone https://github.com/EricGuo5513/HumanML3D
+cd /path/to/motion-diffusion-model
+cp -r /path/to/HumanML3D/HumanML3D dataset/HumanML3D
+cd dataset/HumanML3D
+unzip texts.zip
+```
+
+2. launch the service ( launches the flask app, redis, and celery worker)
+
+This takes a while
+```shell
+docker compose up --buil
+```
+
+## Manual
+
 ### Requirements
 1. cuda capable gpu
 2. python environment with mdm dependencies + flask + redis  `pip install Flask Celery redis`

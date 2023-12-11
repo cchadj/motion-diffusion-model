@@ -1,19 +1,18 @@
 version: '3'
 services:
-  mdm-web:
+  web:
     build:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8888:8888"
-      - "7777:7777"
+      - "${SERVICE_PORT}:${SERVICE_PORT}"
     volumes:
       - type: bind
         source: .
         target: /workspace
     environment:
       - NVIDIA_VISIBLE_DEVICES=all  # Allow access to all available GPUs (adjust as needed)
-    command: python app.py --port 7777
+    command: python app.py --port "${SERVICE_PORT}"
     depends_on:
       - redis
 
@@ -33,7 +32,13 @@ services:
       - .:/workspace
     depends_on:
       - redis
-      - mdm-web
+      - web
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run --token "${CLOUDFLARED_TOKEN}"
+    restart: unless-stopped
 
   redis:
     image: "redis:alpine"
+ 

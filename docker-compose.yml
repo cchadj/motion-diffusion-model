@@ -30,7 +30,7 @@ services:
       dockerfile: Dockerfile
     command: celery --app app.celery worker --loglevel=info --pool=solo
     volumes:
-      - .:/usr/src/app
+      - .:/workspace
     depends_on:
       - redis
       - mdm-web

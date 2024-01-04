@@ -3,6 +3,7 @@ dataset/HumanML3D
 .idea
 save/
 body_models/
+uploads/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
